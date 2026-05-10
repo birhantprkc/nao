@@ -19,11 +19,8 @@ export const useStoryViewerAgentState = (
 	const draftStory = useMemo(() => findStoryDraft(effectiveMessages, storySlug), [effectiveMessages, storySlug]);
 
 	const isStoryStreaming = useMemo(
-		() =>
-			effectiveMessages.some((msg) =>
-				msg.parts.some((p) => p.type === 'tool-story' && p.state === 'input-streaming'),
-			),
-		[effectiveMessages],
+		() => isLatestRelevantStoryPartStreaming(effectiveMessages, storySlug),
+		[effectiveMessages, storySlug],
 	);
 
 	const isAgentRunningFromContext =
@@ -37,3 +34,29 @@ export const useStoryViewerAgentState = (
 		isAgentRunning,
 	};
 };
+
+function isLatestRelevantStoryPartStreaming(messages: UIMessage[], storySlug: string) {
+	for (let m = messages.length - 1; m >= 0; m--) {
+		const parts = messages[m]?.parts ?? [];
+
+		for (let p = parts.length - 1; p >= 0; p--) {
+			const part = parts[p];
+			if (part.type !== 'tool-story') {
+				continue;
+			}
+
+			const id = part.output?.id ?? part.input?.id;
+			if (!id || !isStoryIdMatch(storySlug, id)) {
+				continue;
+			}
+
+			return part.state === 'input-streaming';
+		}
+	}
+
+	return false;
+}
+
+function isStoryIdMatch(expectedId: string, candidateId: string) {
+	return expectedId === candidateId || expectedId.startsWith(candidateId) || candidateId.startsWith(expectedId);
+}
