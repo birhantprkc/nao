@@ -83,7 +83,7 @@ async function listOwnChats(userId: string): Promise<EnrichedChat[]> {
 		.from(s.chat)
 		.innerJoin(s.project, eq(s.project.id, s.chat.projectId))
 		.innerJoin(s.user, eq(s.user.id, s.chat.userId))
-		.where(and(eq(s.chat.userId, userId), isNull(s.chat.deletedAt), isNotScheduledPromptRunChat()))
+		.where(and(eq(s.chat.userId, userId), isNull(s.chat.deletedAt)))
 		.orderBy(desc(s.chat.updatedAt))
 		.execute();
 	return rows satisfies EnrichedChat[];
@@ -116,7 +116,6 @@ async function listSharedWithMeChats(userId: string): Promise<EnrichedChat[]> {
 		.where(
 			and(
 				isNull(s.chat.deletedAt),
-				isNotScheduledPromptRunChat(),
 				ne(s.chat.userId, userId),
 				or(
 					and(
@@ -516,12 +515,7 @@ export const searchUserChats = async (userId: string, query: string, limit = 10)
 		})
 		.from(s.chat)
 		.where(
-			and(
-				eq(s.chat.userId, userId),
-				isNull(s.chat.deletedAt),
-				isNotScheduledPromptRunChat(),
-				caseInsensitiveLike(s.chat.title, searchPattern),
-			),
+			and(eq(s.chat.userId, userId), isNull(s.chat.deletedAt), caseInsensitiveLike(s.chat.title, searchPattern)),
 		)
 		.orderBy(desc(s.chat.updatedAt))
 		.limit(limit)
@@ -545,7 +539,6 @@ export const searchUserChats = async (userId: string, query: string, limit = 10)
 			and(
 				eq(s.chat.userId, userId),
 				isNull(s.chat.deletedAt),
-				isNotScheduledPromptRunChat(),
 				caseInsensitiveLike(s.messagePart.text, searchPattern),
 			),
 		)
@@ -584,10 +577,6 @@ const caseInsensitiveLike = (column: Parameters<typeof like>[0], pattern: string
 	}
 	// SQLite LIKE is case-insensitive by default for ASCII
 	return like(column, pattern);
-};
-
-const isNotScheduledPromptRunChat = () => {
-	return sql`not exists (select 1 from ${s.scheduledPromptRun} where ${s.scheduledPromptRun.chatId} = ${s.chat.id})`;
 };
 
 export const getSelectionForksByShareId = async (
