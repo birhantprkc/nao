@@ -193,7 +193,7 @@ async function getCostLookupTuples(projectId: string): Promise<CostLookupTuple[]
 }
 
 function tupleToValuesRow(tuple: CostLookupTuple): SQL {
-	return sql`(${tuple[0]}, ${tuple[1]}, ${tuple[2]}, ${tuple[3]}, ${tuple[4]}, ${tuple[5]})`;
+	return sql`(${tuple[0]}::text, ${tuple[1]}::text, ${tuple[2]}::double precision, ${tuple[3]}::double precision, ${tuple[4]}::double precision, ${tuple[5]}::double precision)`;
 }
 
 function tupleToSelectRow(tuple: CostLookupTuple, withAliases: boolean): SQL {
