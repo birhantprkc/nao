@@ -5,7 +5,7 @@ import type {
 	GroupedChatListResponse,
 	LlmProvider,
 } from '@nao/shared/types';
-import { and, asc, desc, eq, gte, isNotNull, isNull, like, ne, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, like, ne, or, sql } from 'drizzle-orm';
 
 import s, {
 	DBChat,
@@ -15,7 +15,7 @@ import s, {
 	NewChat,
 	NewMessagePart,
 } from '../db/abstractSchema';
-import { db } from '../db/db';
+import { db, DBTransaction } from '../db/db';
 import dbConfig, { Dialect } from '../db/dbConfig';
 import {
 	ForkMetadata,
@@ -534,13 +534,47 @@ export const upsertMessage = async (
 		await t.delete(s.messagePart).where(eq(s.messagePart.messageId, messageId)).execute();
 		const dbParts = mapUIPartsToDBParts(message.parts, messageId);
 		if (dbParts.length) {
-			await t.insert(s.messagePart).values(dbParts).execute();
+			const partsToInsert = await remapToolCallIdsCollidingWithOtherMessages(t, dbParts, messageId);
+			await t.insert(s.messagePart).values(partsToInsert).execute();
 		}
 
 		await t.update(s.chat).set({ updatedAt: new Date() }).where(eq(s.chat.id, message.chatId)).execute();
 
 		return { messageId };
 	});
+};
+
+/**
+ * Some providers return tool call ids that are only unique within a single request (e.g. `functions.execute_sql:0`),
+ * so resending a message or starting a new chat re-emits ids that already exist. The unique constraint on
+ * `tool_call_id` only tolerates one such id, so any that already belong to another message are namespaced with
+ * the message id to keep them globally unique while staying stable across re-persists of the same message.
+ */
+const remapToolCallIdsCollidingWithOtherMessages = async (
+	t: DBTransaction,
+	parts: NewMessagePart[],
+	messageId: string,
+): Promise<NewMessagePart[]> => {
+	const toolCallIds = parts.map((part) => part.toolCallId).filter((id): id is string => Boolean(id));
+	if (toolCallIds.length === 0) {
+		return parts;
+	}
+
+	const existing = await t
+		.select({ toolCallId: s.messagePart.toolCallId })
+		.from(s.messagePart)
+		.where(and(inArray(s.messagePart.toolCallId, toolCallIds), ne(s.messagePart.messageId, messageId)))
+		.execute();
+	if (existing.length === 0) {
+		return parts;
+	}
+
+	const collidingIds = new Set(existing.map((row) => row.toolCallId));
+	return parts.map((part) =>
+		part.toolCallId && collidingIds.has(part.toolCallId)
+			? { ...part, toolCallId: `${messageId}:${part.toolCallId}` }
+			: part,
+	);
 };
 
 function stripUndefined<T extends Record<string, unknown>>(value: T): Partial<T> {
