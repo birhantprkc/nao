@@ -191,6 +191,18 @@ const baseEnvSchema = z.object({
 		.pipe(z.url({ message: 'MCP_PUBLIC_URL must be a valid URL' }).optional()),
 
 	/**
+	 * Whether unauthenticated OAuth dynamic client registration (POST /api/auth/oauth2/register) is
+	 * allowed. MCP clients that self-register (Claude, Cursor, …) rely on it, so it defaults to true.
+	 * Self-hosted deployments that connect only via manually-created confidential clients can set it
+	 * to "false" to shrink the attack surface.
+	 */
+	ALLOW_UNAUTHENTICATED_DCR: z
+		.enum(['true', 'false'])
+		.optional()
+		.default('true')
+		.transform((val) => val === 'true'),
+
+	/**
 	 * Lifetime (in seconds) of OAuth access tokens issued to MCP clients. Access tokens are
 	 * bearer credentials, so a shorter lifetime limits how long a leaked token stays usable
 	 * (refresh tokens cover renewal). Defaults to 24h to preserve prior behavior.
