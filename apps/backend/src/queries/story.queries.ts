@@ -567,6 +567,13 @@ export async function getSqlQueriesFromCode(
 	return executeSqlQueries.getLatestSqlQueriesByIds(chatId, queryIds);
 }
 
+export async function getSqlQueriesByIds(
+	chatId: string,
+	queryIds: Set<string>,
+): Promise<Record<string, { sqlQuery: string; databaseId?: string; adminMode: boolean }>> {
+	return executeSqlQueries.getLatestSqlQueriesByIds(chatId, queryIds);
+}
+
 export async function getSqlQueryById(
 	chatId: string,
 	queryId: string,
